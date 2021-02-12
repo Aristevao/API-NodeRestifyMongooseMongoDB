@@ -1,55 +1,14 @@
-/*   Código para explorar req, resp e next
-
-      Funcionamento: 
-      Ao acessar a rota /info com navegador na versão MSIE 7.0, 
-      é exibida mensagem pedindo atualização e impede avanço para próxima response.
-      
-      Mínimo para criar uma aplicação Restify:
-        - Criar o Server
-        - Configurar as rotas (urls)
-        - Ouvir determinada porta
+/*   Código para ...
       */
 
-import * as restify from 'restify'
+import {Server} from './server/server'
+import {usersRouter} from './users/users.router'
 
-const server = restify.createServer({
-  name: 'meat-api',
-  version: '1.0.0'
-})
-
-server.use(restify.plugins.queryParser()) // Usado para permitir o uso do <req.query>
-
-server.get('/info', [
-  (req, resp, next)=>{
-    if(req.userAgent() && req.userAgent().includes('MSIE 7.0')){
-    // resp.status(400)
-    // resp.json({message: 'Please, update your browser'})
-    let error: any = new Error()
-    error.statusCode = 400
-    error.message = 'Please, update your browser'
-    return next(error)
-  }
-  return next() // Indica fim da callback e permite avanço
-
-},(req, resp, next)=>{
-  /* Maneiras diferentes de permitir json na web:
-      1.  resp.contentType = 'application/json';
-      2.  resp.setHeader('Content-Type','application/json');
-      Chamada:  resp.send({message: 'hello'}); 
-
-      Ou usar abreviação abaixo: 
-      3. resp.json({ message: 'hello })*/
-  
-  resp.json({
-    browser: req.userAgent(),
-    method: req.method,
-    url: req.href(),
-    path: req.path(),
-    query: req.query
-  })
-  return next()
-}])
-
-server.listen(3000, ()=>{ // Ouve a porta 3000, e se não houver problema indica mensagem no console
-  console.log('API is running on http://localhost:3000')
+const server = new Server()
+server.bootstrap([usersRouter]).then(server=>{
+  console.log('Server is listening on:', server.application.address())
+}).catch(error=>{
+  console.log('Server failed to start')
+  console.error(error)
+  process.exit(1) // fecha a aplicação ao dar erro. <1> indica saída anormal
 })
