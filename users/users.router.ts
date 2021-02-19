@@ -1,72 +1,44 @@
-import {Router} from '../common/router'
+import {ModelRouter} from '../common/model-router'
 import * as restify from 'restify'
+import {NotFoundError} from 'restify-errors'
 import {User} from './users.model'
 
 // Routes
-class UsersRouter extends Router {
-    applyRoutes(application: restify.Server){
+class UsersRouter extends ModelRouter<User> {
 
-        // Returns json of all users
-        application.get('/users', (req, resp, next)=> {
-            User.find().then(users=>{
-                resp.json(users)
-                return next()
-            })
+    constructor(){ // The constructor method is a special method of a class for creating and initializing an object of that class.
+        super(User) // TypeScript exige constructor da classe base. Obrigatório
+        this.on('beforeRender', document=>{
+            document.password = undefined // ou <delete document.password>
         })
+    }
 
-        // Return json of a specific user by id defined in URL. Ex: </users/1> returns user with id = 1 
-        application.get('/users/:id', (req, resp, next)=>{ // <:id> parâmetro id definido como dinâmico. O valor recebido pelo id vai ser definido pelo <params>
-            User.findById(req.params.id).then(user=>{ // <req.params.id> pegando o valor  do parâmetro do id
-                if(user){ // se o usuário for encontrado, exibí-lo
-                    resp.json(user)
-                    return next()
-                }
-                resp.send(404) // se não for encontrado
-                
-            })
-        })
-
-        application.post('/users', (req, resp, next)=>{
-            let user = new User(req.body) // cria um documento vazio no model
-
-            /* Preenchendo as propriedades do documento
-                pode ser usado, ex:  <user.name = req.body.name> | <user.email = req.body.email>
-                Porém se houver muitos atributos fica ruim. Então pode ser chamado todos de uma vez no model <User(req.body)> */
-                
-            user.save().then(user=>{
-                user.password = undefined // limpa informação da senha para não exibir na response
-                resp.json(user)
-                return next()
-            }) // salva o documento e retorna o objeto usuário
-        })
-
-         // usando rota </users/:id> pois possibilita substituir um objeto por id, caso contrário todos seriam substituídos
-         application.put('/users/:id', (req, resp, next)=>{
-            const options  = {overwrite: true} // 3° arg do <update> faz com que o conteúdo seja sobrescrito e não atualizado (como PATCH)
-            User.update({_id:req.params.id}, req.body, options)
-                .exec().then(result =>{ // TODO Verificar porque reclama do <result>
-                  if(result.n){ // verifica se o documento foi encontrado e atualizado
-                    return User.findById(req.params.id)
+    // Encontrar objeto por email na query. Ex: http://localhost:3000/users?"email": "peter@marvel.com"
+    findByEmail = (req, resp, next)=>{
+        if(req.query.email){
+          User.findByEmail(req.query.email) // usando método findByEmail criado no ./users.model
+              .then(user => { // removendo erro incoerente ao enviar email inexistente ao DB e substituindo por um array vazio
+                  if(user){
+                      return [user]
                   }else{
-                    resp.send(404)
+                      return []
                   }
-            }).then(user=>{
-              resp.json(user)
-              return next()
-            })
-          })
+              })
+              .then(this.renderAll(resp, next))
+              .catch(next)
+        }else{
+          next()
+        }
+    }
 
-        application.patch('/users/:id', (req, resp, next)=>{
-            const options = {new: true}
-            User.findByIdAndUpdate({_id:req.params.id}, req.body, options).then(user=>{
-                if(user){
-                    resp.json(user)
-                    return next()
-                }
-                resp.send(404)
-                return next()
-            })
-        })
+    applyRoutes(application: restify.Server){
+        application.get({path:`${this.basePath}`, version: '2.0.0'}, [this.findByEmail, this.findAll]) // Para definir a versão de filtro, configurar o HEADER como: < value: accept-version, key: 1.0.0 > Também é aceito < key: >1.0.0 >, exibe todos objetos das versões maiores que 1.0.0
+        application.get({path:`${this.basePath}`, version: '1.0.0'}, this.findAll)    // Returns json of all users        
+        application.get(`${this.basePath}/:id`, [this.validateId, this.findById])    // Return json of a specific user by id defined in URL. Ex: </users/1> returns user with id = 1         
+        application.post(`${this.basePath}`, this.save)                                        // Insert a json object in `/users`         
+        application.put(`${this.basePath}/:id`, [this.validateId, this.replace])     // Usando rota </users/:id> pois possibilita substituir um objeto por id, caso contrário todos seriam substituídos        
+        application.patch(`${this.basePath}/:id`, [this.validateId, this.update])  // Update a object by id        
+        application.del(`${this.basePath}/:id`, [this.validateId, this.delete])       // Delete a object by id
     }
 }
       

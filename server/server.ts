@@ -3,6 +3,7 @@ import * as mongoose from 'mongoose'
 import {environment} from '../common/environment'
 import {Router} from '../common/router'
 import {mergePatchBodyParser} from './merge-patch.parser'
+import {handleError} from './error.handler'
 
 export class Server {
 
@@ -38,6 +39,8 @@ export class Server {
                 resolve(this.application)
             })
 
+            this.application.on('restifyError', handleError)
+
         }catch(error){
             reject(error)
         }
@@ -47,6 +50,13 @@ export class Server {
     bootstrap(routers: Router[] = []): Promise<Server>{
         return this.initializeDb().then(()=> // Se houver conexão com o banco de dados -> permite início as rotas
             this.initRoutes(routers).then(()=> this))
+    }
+
+    // Desconecta o servidor. Usado para encerrar os testes no afterAll()
+    shutdown(){
+        return mongoose.disconnect().then(()=>{
+            this.application.close
+        })
     }
 
 }
