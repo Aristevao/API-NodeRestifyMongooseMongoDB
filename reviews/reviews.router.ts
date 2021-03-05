@@ -2,6 +2,7 @@ import {ModelRouter} from '../common/model-router'
 import * as restify from 'restify'
 import * as mongoose from 'mongoose'
 import {Review} from './reviews.model'
+import {authorize} from '../security/authz.handler'
 
 class ReviewsRouter extends ModelRouter<Review>{
     constructor(){
@@ -33,7 +34,7 @@ class ReviewsRouter extends ModelRouter<Review>{
     applyRoutes(application: restify.Server){        
         application.get(`${this.basePath}`, this.findAll)                                      // Returns json of all reviews        
         application.get(`${this.basePath}/:id`, [this.validateId, this.findById])    // Return json of a specific user by id defined in URL. Ex: </reviews/1> returns user with id = 1         
-        application.post(`${this.basePath}`, this.save)                                        // Insert a json object in '/reviews'         
+        application.post(`${this.basePath}`, [authorize('user') ,this.save])                                        // Insert a json object in '/reviews'         
     }
 }
       

@@ -7,12 +7,17 @@ import {environment} from '../common/environment'
 export interface User extends mongoose.Document {
     name: string,
     email: string,
-    password: string
+    password: string,
+    cpf: string,
+    gender: string,
+    profiles: string[], // tipo de usuário: user, adm, manager, etc. Criado para determinar limite de acesso de cada perfil
+    matches(password: string): boolean, // adicionando função à interface para que fique disponível para ser usada no código
+    hasAny(...profiles: string[]): boolean // checa se há perfis. Exemplo de retorno true: hasAny(['admin','user'])
 }
 
 // Interface para representar o model. Criada para remover o erro gerado pelo TypeScript ao usar o método findByEmail
 export interface UserModel  extends mongoose.Model<User> {
-    findByEmail(email: string): Promise<User>
+    findByEmail(email: string, projection?: string): Promise<User> // projection? -> interrogação usada para indicar que é um parâmetro opcional. Quando chamar findByEmail(email), projection será considerado <undefined>. Projection usado no arquivo auth.handler para autenticação de senha
 }
 
 // Schema diz ao mongoose quais as propriedades e tipos dos documentos
@@ -48,15 +53,33 @@ const userSchema = new mongoose.Schema({
             validator: validateCPF,
             message: '{PATH}: Invalid CPF ({VALUE})'
         }
+    },
+    profiles: {
+        type: [String],
+        required: false
     }
 })
 
 /* Criando método personalizado no model
     Propriedade do statics <findByEmail> é a definição do nome do método
     Não pode ser usado arrow function por causa do <this>
-    Para o TypeScript aceitar o método, é preciso criar uma interface    */
-userSchema.statics.findByEmail = function(email: string){
-    return this.findOne({email}) // Escrever somente <email> é o mesmo que < {email: email} >
+    Para o TypeScript aceitar o método, é preciso criar uma interface
+
+    2° parametro (projection) -> pode ser usado para indicar quais campos do objeto que queremose  quais não queremos.
+    Usado no auth.handler para pegar a senha do objeto do respectivo email    */
+userSchema.statics.findByEmail = function(email: string, projection: string){
+    return this.findOne({email}, projection) // Escrever somente <email> é o mesmo que < {email: email} >
+}
+
+/* Criando método de instância matches
+    Não pode usar arrow function aqui pois arrow captura o this     */
+userSchema.methods.matches = function(password: string): boolean {
+    return bcrypt.compareSync(password, this.password) // compara o password com seu respectivo hash, se for verdadeiro será retornado TRUE
+    }
+      
+/*  Analisa se um dos elementos faz parte dos profiles com o método some. Se houver, retorna TRUE  */
+userSchema.methods.hasAny = function(...profiles: string[]) : boolean {
+    return profiles.some(profile => this.profiles.indexOf(profile)!== -1)
 }
 
 /* Criptografando senha com bcrypt
